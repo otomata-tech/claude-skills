@@ -1,0 +1,68 @@
+#!/bin/bash
+# Search Unsplash for stock photos (no API key needed)
+# Usage: unsplash "query" [count]
+# Returns direct image URLs ready to download
+
+QUERY="$1"
+COUNT="${2:-5}"
+
+if [ -z "$QUERY" ]; then
+    echo "Usage: unsplash \"query\" [count]"
+    echo "Example: unsplash \"office workspace\" 5"
+    exit 1
+fi
+
+ENCODED=$(echo "$QUERY" | sed 's/ /+/g')
+
+echo "Searching Unsplash: $QUERY"
+echo ""
+
+# Use Unsplash internal API (returns JSON, no auth needed)
+TMPFILE=$(mktemp)
+curl -sL "https://unsplash.com/napi/search/photos?query=$ENCODED&per_page=20&orientation=landscape" -o "$TMPFILE" 2>/dev/null
+
+if [ ! -s "$TMPFILE" ]; then
+    echo "Error: no response from Unsplash"
+    rm -f "$TMPFILE"
+    exit 1
+fi
+
+# Parse with jq (preferred) or python3 fallback
+if command -v jq &>/dev/null; then
+    TOTAL=$(jq -r '.total // 0' "$TMPFILE")
+    echo "Found $TOTAL results, showing top $COUNT:"
+    echo ""
+
+    jq -r --argjson n "$COUNT" '
+      [.results[:$n][] | {
+        url: (.urls.raw + "&w=1200&q=80"),
+        desc: (.description // .alt_description // "No description"),
+        author: (.user.name // "Unknown")
+      }] | .[] | "\(.url)\n  \(.desc) (by \(.author))\n"
+    ' "$TMPFILE" 2>/dev/null
+
+elif command -v python3 &>/dev/null; then
+    python3 -c "
+import json
+with open('$TMPFILE') as f:
+    data = json.load(f)
+total = data.get('total', 0)
+print(f'Found {total} results, showing top $COUNT:\n')
+for r in data.get('results', [])[:$COUNT]:
+    url = r['urls']['raw'] + '&w=1200&q=80'
+    desc = r.get('description') or r.get('alt_description') or 'No description'
+    author = r.get('user', {}).get('name', 'Unknown')
+    print(f'{url}')
+    print(f'  {desc} (by {author})')
+    print()
+" 2>/dev/null
+
+else
+    # Fallback: extract URLs with grep
+    grep -oE '"raw":"https://[^"]+' "$TMPFILE" | sed 's/"raw":"//' | head -n "$COUNT" | while read -r url; do
+        echo "${url}&w=1200&q=80"
+    done
+fi
+
+rm -f "$TMPFILE"
+echo "Download: curl -Lo image.jpg \"URL\""

@@ -1,0 +1,29 @@
+#!/bin/bash
+# Generate AI images with Pollinations (free, no API key)
+# Usage: pollinations "prompt" [output.png]
+
+PROMPT="$1"
+OUTPUT="${2:-generated.png}"
+
+if [ -z "$PROMPT" ]; then
+    echo "Usage: pollinations \"prompt\" [output.png]"
+    echo "Example: pollinations \"a robot coding\" robot.png"
+    exit 1
+fi
+
+# URL encode
+ENCODED=$(python3 -c "import urllib.parse; print(urllib.parse.quote('''$PROMPT'''))" 2>/dev/null || echo "$PROMPT" | sed 's/ /%20/g')
+
+URL="https://image.pollinations.ai/prompt/$ENCODED"
+
+echo "Generating: $PROMPT"
+echo ""
+
+if curl -sL "$URL" -o "$OUTPUT"; then
+    echo "Saved: $OUTPUT"
+    file "$OUTPUT" 2>/dev/null | head -1
+    ls -lh "$OUTPUT" 2>/dev/null | awk '{print $5, $9}'
+else
+    echo "Error: generation failed"
+    exit 1
+fi

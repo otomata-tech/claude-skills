@@ -1,0 +1,168 @@
+#!/bin/bash
+
+# Claude conversation finder - Cross-platform (Linux/macOS)
+# Usage: claude-search-resume [keyword] [--global] [--from "YYYY-MM-DD HH:MM"] [--to "YYYY-MM-DD HH:MM"]
+
+# Use CLAUDE_CONFIG_DIR if set, otherwise detect OS default
+if [ -n "$CLAUDE_CONFIG_DIR" ]; then
+    CLAUDE_DIR="$CLAUDE_CONFIG_DIR"
+else
+    case "$(uname -s)" in
+        Linux*)  CLAUDE_DIR="$HOME/.claude" ;;
+        Darwin*) CLAUDE_DIR="$HOME/.claude" ;;
+        CYGWIN*|MINGW*|MSYS*) CLAUDE_DIR="$USERPROFILE/.claude" ;;
+        *) CLAUDE_DIR="$HOME/.claude" ;;
+    esac
+fi
+
+PROJECTS_DIR="$CLAUDE_DIR/projects"
+
+# Check if Claude directory exists
+if [ ! -d "$PROJECTS_DIR" ]; then
+    echo "Error: Claude projects directory not found at $PROJECTS_DIR"
+    echo "Make sure Claude Code is installed and has been used at least once."
+    exit 1
+fi
+
+# Cross-platform date parsing
+parse_date_to_epoch() {
+    local date_str="$1"
+    if date --version >/dev/null 2>&1; then
+        # GNU date (Linux)
+        date -d "$date_str" +%s 2>/dev/null
+    else
+        # BSD date (macOS)
+        # Try ISO format first, then other formats
+        date -j -f "%Y-%m-%dT%H:%M:%S" "$date_str" +%s 2>/dev/null || \
+        date -j -f "%Y-%m-%d %H:%M" "$date_str" +%s 2>/dev/null || \
+        date -j -f "%Y-%m-%d" "$date_str" +%s 2>/dev/null
+    fi
+}
+
+format_date() {
+    local date_str="$1"
+    if date --version >/dev/null 2>&1; then
+        # GNU date (Linux)
+        date -d "$date_str" "+%Y-%m-%d %H:%M" 2>/dev/null
+    else
+        # BSD date (macOS) - parse ISO timestamp
+        local epoch=$(parse_date_to_epoch "$date_str")
+        if [ -n "$epoch" ]; then
+            date -j -f "%s" "$epoch" "+%Y-%m-%d %H:%M" 2>/dev/null
+        fi
+    fi
+}
+
+KEYWORD=""
+FILTER_GLOBAL=false
+FROM_DATE=""
+TO_DATE=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --global) FILTER_GLOBAL=true; shift ;;
+        --from) FROM_DATE="$2"; shift 2 ;;
+        --to) TO_DATE="$2"; shift 2 ;;
+        --help|-h)
+            echo "Usage: claude-search-resume [keyword] [options]"
+            echo ""
+            echo "Options:"
+            echo "  --global              Search all projects (default: current directory only)"
+            echo "  --from \"YYYY-MM-DD\"   Filter from date"
+            echo "  --to \"YYYY-MM-DD\"     Filter to date"
+            echo "  --help, -h            Show this help"
+            echo ""
+            echo "Examples:"
+            echo "  claude-search-resume                    # Recent conversations in current project"
+            echo "  claude-search-resume \"auth\" --global   # Search 'auth' in all projects"
+            echo "  claude-search-resume --from \"2026-01-13\" --global"
+            exit 0
+            ;;
+        *) KEYWORD="$1"; shift ;;
+    esac
+done
+
+CURRENT_DIR=$(pwd)
+RESULTS_FILE=$(mktemp)
+
+echo "Finding conversations..."
+[ -n "$KEYWORD" ] && echo "Filtering by: $KEYWORD"
+[ "$FILTER_GLOBAL" = false ] && echo "In: $CURRENT_DIR" || echo "Searching globally"
+echo ""
+
+# Find all session files (compatible with bash 3.x on macOS)
+FILES=()
+while IFS= read -r -d '' file; do
+    FILES+=("$file")
+done < <(find "$PROJECTS_DIR" -name "*.jsonl" -type f -size +0 -print0 2>/dev/null | grep -zv '/agent-' | grep -zv '/subagents/')
+
+# Fallback for systems without grep -z
+if [ ${#FILES[@]} -eq 0 ]; then
+    while IFS= read -r file; do
+        [[ "$file" == *"/agent-"* ]] && continue
+        [[ "$file" == *"/subagents/"* ]] && continue
+        FILES+=("$file")
+    done < <(find "$PROJECTS_DIR" -name "*.jsonl" -type f -size +0 2>/dev/null)
+fi
+
+for session_file in "${FILES[@]}"; do
+    session_id=$(basename "$session_file" .jsonl)
+
+    # Skip agent files
+    [[ "$session_id" == agent-* ]] && continue
+
+    # Get cwd from session file
+    project_path=$(grep -m1 '"cwd"' "$session_file" 2>/dev/null | jq -r '.cwd // ""' 2>/dev/null)
+    [ -z "$project_path" ] && continue
+
+    # Filter by directory
+    if [ "$FILTER_GLOBAL" = false ]; then
+        [ "$project_path" != "$CURRENT_DIR" ] && continue
+    fi
+
+    # Get timestamp
+    timestamp=$(tail -1 "$session_file" 2>/dev/null | jq -r '.timestamp // ""' 2>/dev/null)
+    [ -z "$timestamp" ] && continue
+
+    # Date filter
+    if [ -n "$FROM_DATE" ]; then
+        from_epoch=$(parse_date_to_epoch "$FROM_DATE")
+        ts_epoch=$(parse_date_to_epoch "$timestamp")
+        [ -n "$from_epoch" ] && [ -n "$ts_epoch" ] && [ "$ts_epoch" -lt "$from_epoch" ] && continue
+    fi
+    if [ -n "$TO_DATE" ]; then
+        to_epoch=$(parse_date_to_epoch "$TO_DATE")
+        ts_epoch=$(parse_date_to_epoch "$timestamp")
+        [ -n "$to_epoch" ] && [ -n "$ts_epoch" ] && [ "$ts_epoch" -gt "$to_epoch" ] && continue
+    fi
+
+    # Keyword filter
+    if [ -n "$KEYWORD" ]; then
+        grep -qi "$KEYWORD" "$session_file" 2>/dev/null || continue
+    fi
+
+    # Extract info
+    date_str=$(format_date "$timestamp")
+    [ -z "$date_str" ] && date_str="?"
+    preview=$(grep '"type":"user"' "$session_file" 2>/dev/null | head -1 | jq -r '.message.content // ""' 2>/dev/null | tr '\n\t|' '   ' | cut -c1-80)
+    msg_count=$(grep -c '"type":"user"' "$session_file" 2>/dev/null || echo 0)
+
+    printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$timestamp" "$date_str" "$project_path" "$preview" "$msg_count" "$session_id" >> "$RESULTS_FILE"
+done
+
+# Display
+if [ -s "$RESULTS_FILE" ]; then
+    count=0
+    while IFS=$'\t' read -r timestamp date_str project preview msg_count session_id; do
+        count=$((count + 1))
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "$count. [$date_str] $project ($msg_count msgs)"
+        [ -n "$preview" ] && echo "   💬 $preview"
+        echo "   ▶ claude --resume $session_id"
+    done < <(sort -r "$RESULTS_FILE" | head -30)
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+else
+    echo "No conversations found"
+fi
+
+rm -f "$RESULTS_FILE"

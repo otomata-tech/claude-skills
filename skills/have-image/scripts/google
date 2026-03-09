@@ -1,0 +1,38 @@
+#!/bin/bash
+# Search Google Images (for logos, people, specific images)
+# Usage: google "query" [count]
+
+QUERY="$1"
+COUNT="${2:-5}"
+
+if [ -z "$QUERY" ]; then
+    echo "Usage: google \"query\" [count]"
+    echo "Example: google \"Stripe logo png\" 5"
+    exit 1
+fi
+
+ENCODED=$(python3 -c "import urllib.parse; print(urllib.parse.quote('''$QUERY'''))" 2>/dev/null || echo "$QUERY" | sed 's/ /+/g')
+
+SEARCH_URL="https://www.google.com/search?q=$ENCODED&tbm=isch"
+
+echo "Google Images: $QUERY"
+echo ""
+echo "Search: $SEARCH_URL"
+echo ""
+
+# Try to extract image URLs (may fail due to JS)
+IMAGES=$(curl -sL -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" "$SEARCH_URL" 2>/dev/null | \
+    grep -oE 'https://[^"]+\.(jpg|jpeg|png|webp|svg)' | \
+    grep -v 'gstatic.com' | \
+    sort -u | \
+    head -n "$COUNT")
+
+if [ -n "$IMAGES" ]; then
+    echo "Found:"
+    echo "$IMAGES"
+    echo ""
+    echo "Download: curl -Lo image.jpg \"URL\""
+else
+    echo "No direct URLs found (Google uses JS rendering)."
+    echo "Open the search URL in browser, or use WebFetch."
+fi

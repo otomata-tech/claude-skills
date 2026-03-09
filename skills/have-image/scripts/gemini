@@ -1,0 +1,77 @@
+#!/bin/bash
+# Generate AI images with Google Gemini Nano Banana
+# Usage: gemini "prompt" [output.png]
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SKILL_DIR="$(dirname "$SCRIPT_DIR")"
+
+# Load .env if exists
+if [ -f "$SKILL_DIR/.env" ]; then
+    export $(grep -v '^#' "$SKILL_DIR/.env" | xargs)
+fi
+
+PROMPT="$1"
+OUTPUT="${2:-generated.png}"
+
+if [ -z "$PROMPT" ]; then
+    echo "Usage: gemini \"prompt\" [output.png]"
+    echo "Example: gemini \"minimalist app icon\" icon.png"
+    exit 1
+fi
+
+if [ -z "$GEMINI_API_KEY" ]; then
+    echo "Error: GEMINI_API_KEY not set"
+    echo ""
+    echo "To set up:"
+    echo "1. Go to https://aistudio.google.com/apikey"
+    echo "2. Create an API key"
+    echo "3. Add to $SKILL_DIR/.env: GEMINI_API_KEY=your-key"
+    exit 1
+fi
+
+# Check for venv
+if [ -d "$SKILL_DIR/venv" ]; then
+    source "$SKILL_DIR/venv/bin/activate"
+fi
+
+# Check for google-genai
+if ! python3 -c "import google.genai" 2>/dev/null; then
+    echo "Error: google-genai not installed"
+    echo ""
+    echo "To install:"
+    echo "  cd $SKILL_DIR"
+    echo "  python3 -m venv venv"
+    echo "  source venv/bin/activate"
+    echo "  pip install google-genai Pillow"
+    exit 1
+fi
+
+echo "Generating with Nano Banana: $PROMPT"
+echo ""
+
+python3 << EOF
+import os
+from google import genai
+from google.genai import types
+from PIL import Image
+import io
+
+client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+
+response = client.models.generate_content(
+    model="gemini-2.5-flash-image",
+    contents="Generate an image: $PROMPT",
+    config=types.GenerateContentConfig(
+        response_modalities=["IMAGE", "TEXT"],
+    ),
+)
+
+for part in response.candidates[0].content.parts:
+    if part.inline_data:
+        image_data = part.inline_data.data
+        image = Image.open(io.BytesIO(image_data))
+        image.save("$OUTPUT")
+        print(f"Saved: $OUTPUT")
+    elif part.text and part.text.strip():
+        print(f"Note: {part.text[:200]}")
+EOF
