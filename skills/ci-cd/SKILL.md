@@ -194,8 +194,8 @@ server {
 server {
     listen 443 ssl http2;
     server_name monsite.tuls.me;
-    ssl_certificate /etc/letsencrypt/live/tuls.me/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/tuls.me/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/tuls.me-wildcard/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/tuls.me-wildcard/privkey.pem;
     root /opt/monsite;
     index index.html;
     location / { try_files $uri $uri/ =404; }
@@ -213,8 +213,8 @@ server {
 server {
     listen 443 ssl http2;
     server_name monsite.tuls.me;
-    ssl_certificate /etc/letsencrypt/live/tuls.me/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/tuls.me/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/tuls.me-wildcard/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/tuls.me-wildcard/privkey.pem;
 
     root /opt/monsite/frontend/dist;
     index index.html;
@@ -353,4 +353,5 @@ Chaque projet a dans `infra/prod/` :
 - [ ] SSL synchronisé (`ssl-cert.sh sync`)
 - [ ] `.github/workflows/deploy.yml` créé
 - [ ] Secret `SSH_PRIVATE_KEY` configuré
+- [ ] Monitor ajouté dans Uptime Kuma (https://uptime.tuls.me)
 - [ ] (optionnel) Branch deploy

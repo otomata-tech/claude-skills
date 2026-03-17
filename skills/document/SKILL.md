@@ -1,7 +1,7 @@
 ---
-name: up:context
+name: document
 description: Update project documentation (CLAUDE.md + docs/). Use after significant work to keep docs in sync.
-disable-model-invocation: true
+disable-model-invocation: false
 argument-hint: "[docs|all]"
 ---
 
@@ -25,7 +25,7 @@ For todo management, use `/up:task`.
 
 ### Write/Update CLAUDE.md
 
-Target: **under 150 lines**. Every line must earn its place.
+Target: **under 500 lines**. Every line must earn its place.
 
 ```markdown
 # <Project Name>
@@ -112,7 +112,7 @@ docs/
 
 ### docs/ Rules
 
-- Max 200 lines per file — split if larger
+- Max 500 lines per file — split if larger
 - Include file paths with line refs where useful (`src/auth/login.ts:42`)
 - Update existing docs incrementally, don't rewrite from scratch
 - If a doc is accurate and unaffected by recent changes, don't touch it
