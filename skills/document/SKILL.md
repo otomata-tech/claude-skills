@@ -1,5 +1,5 @@
 ---
-name: document
+name: wrap-up
 description: Update project documentation (CLAUDE.md + docs/). Use after significant work to keep docs in sync.
 disable-model-invocation: false
 argument-hint: "[docs|all]"
@@ -67,9 +67,28 @@ Detailed docs in `docs/`:
 - Ask before removing any existing content
 - Use `@docs/filename.md` import if a doc should always be loaded
 
+### What NOT to add
+
+- Obvious code info ("UserService handles user operations" — the name says it)
+- Generic best practices ("write tests", "use meaningful names" — universal, not project-specific)
+- One-off fixes unlikely to recur
+- Verbose explanations — prefer `Auth: JWT with HS256` over a paragraph about RFC 7519
+
 ---
 
-## 2. docs/ — The Territory
+## 2. Session Reflection (when called without argument or with `reflect`)
+
+Before touching any file, reflect on the current session:
+
+1. **What context was missing?** — commands discovered, config quirks, gotchas encountered
+2. **What patterns worked?** — testing approaches, code style decisions, environment setup
+3. **What would help a fresh session?** — knowledge that isn't obvious from the code
+
+Use this reflection to guide what to add to CLAUDE.md and docs/. Don't just sync the diff — capture what you *learned*.
+
+---
+
+## 3. docs/ — The Territory
 
 ### Process
 
@@ -120,7 +139,7 @@ docs/
 
 ---
 
-## 3. Summary Output
+## 4. Summary Output
 
 After running, output:
 - Files created/modified
