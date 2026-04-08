@@ -39,15 +39,26 @@ SSL automatique via Caddy (ACME). Pas de gestion manuelle de certificats.
 
 Voir `/data/infra/CLAUDE.md` pour la liste complète des services et ports.
 
-### DNS Scaleway
+### DNS — Cloudflare
 
-Wildcard `*.tuls.me` → `51.15.225.121` déjà en place.
+**Tous les domaines sont sur Cloudflare.** Credentials dans `/data/infra/.env`.
 
-Pour un domaine hors `*.tuls.me` :
+**oto.zone** (défaut pour tout nouveau projet) :
+Convention : `project.oto.zone` (prod), `staging.project.oto.zone` (staging).
+
+Ajouter un record A **proxied** (Origin Cert côté Caddy) :
 ```bash
-scw dns record add tuls.me name=SUBDOMAIN type=A data=51.15.225.121 ttl=300
-scw dns record list tuls.me
+source /data/infra/.env
+ZONE_ID="95430aac1d1c77e859af05c3ec570d85"  # oto.zone
+curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records" \
+  -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"type": "A", "name": "PROJECT.oto.zone", "content": "51.15.225.121", "ttl": 1, "proxied": true}'
 ```
+
+**tuls.me** (services historiques) : même principe, zone ID `38ef1fbf80dd80bf321dadc9c0dc126f`.
+
+Détails zones/tokens : `docs/cloudflare.md`
 
 ---
 
@@ -99,11 +110,12 @@ ssh -i ~/.ssh/alexis root@51.15.225.121 "systemctl daemon-reload && systemctl en
 
 Éditer `/data/infra/Caddyfile` (source de vérité locale) :
 
-**Backend seul :**
+**Backend seul (Origin Cert, domaine proxied CF) :**
 ```
 # --- <project> ---
 
-<subdomain>.tuls.me {
+<project>.oto.zone {
+    tls /etc/caddy/origin-certs/oto-zone.pem /etc/caddy/origin-certs/oto-zone.key
     reverse_proxy localhost:PORT
 }
 ```
@@ -112,7 +124,8 @@ ssh -i ~/.ssh/alexis root@51.15.225.121 "systemctl daemon-reload && systemctl en
 ```
 # --- <project> ---
 
-<subdomain>.tuls.me {
+<project>.oto.zone {
+    tls /etc/caddy/origin-certs/oto-zone.pem /etc/caddy/origin-certs/oto-zone.key
     handle /api/* {
         reverse_proxy localhost:PORT
     }
@@ -123,6 +136,18 @@ ssh -i ~/.ssh/alexis root@51.15.225.121 "systemctl daemon-reload && systemctl en
     }
 }
 ```
+
+**Avec staging :**
+```
+staging.<project>.oto.zone {
+    tls /etc/caddy/origin-certs/oto-zone.pem /etc/caddy/origin-certs/oto-zone.key
+    reverse_proxy localhost:STAGING_PORT
+}
+```
+
+Origin Certs disponibles : `oto-zone`, `tuls-me`, `otomata-tech`, `mento-cc`, `oto-ninja` dans `/etc/caddy/origin-certs/`.
+
+**Domaine non-proxied CF** (ex: domaine client externe) : ne pas mettre de `tls`, Caddy utilisera ACME automatique.
 
 Déployer le Caddyfile :
 ```bash
@@ -226,9 +251,9 @@ Adapter le script selon la stack (Python/Node.js, avec/sans frontend).
 
 ---
 
-## Staging (optionnel)
+## Staging
 
-Environnement staging à la demande : `staging.<project>.tuls.me`.
+Environnement staging à la demande : `staging.<project>.oto.zone`.
 
 ### Setup
 
@@ -237,7 +262,7 @@ Environnement staging à la demande : `staging.<project>.tuls.me`.
 3. **Code** : `/opt/<project>-staging/` (clone séparé sur la branche `staging` ou `develop`)
 4. **Caddy** : ajouter un bloc dans le Caddyfile
    ```
-   staging.<subdomain>.tuls.me {
+   staging.<project>.oto.zone {
        reverse_proxy localhost:STAGING_PORT
    }
    ```
@@ -302,6 +327,7 @@ La config Caddy est centralisée dans `/data/infra/Caddyfile`, pas dans le proje
 
 ### Prod
 - [ ] Port choisi et vérifié sur serveur
+- [ ] Record A ajouté sur Cloudflare (dns-only, via API ou dashboard)
 - [ ] `infra/prod/service.conf` créé
 - [ ] Service systemd activé sur serveur
 - [ ] Bloc ajouté dans `/data/infra/Caddyfile` et déployé

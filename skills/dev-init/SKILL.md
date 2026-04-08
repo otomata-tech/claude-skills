@@ -206,7 +206,7 @@ frontend: cd frontend && npx vite --host
 PORT=<port>
 DATABASE_URL=postgres://user:pass@localhost:5434/<project>
 AUTH0_DOMAIN=otomata.us.auth0.com
-AUTH0_AUDIENCE=https://api.<project>.proj.otomata.tech
+AUTH0_AUDIENCE=https://api.<project>.oto.zone
 AUTH_SECRET=<random-string>  # Pour JWT internes / SSO cookie
 ```
 
@@ -214,7 +214,7 @@ AUTH_SECRET=<random-string>  # Pour JWT internes / SSO cookie
 ```env
 VITE_AUTH0_DOMAIN=otomata.us.auth0.com
 VITE_AUTH0_CLIENT_ID=<client-id>
-VITE_AUTH0_AUDIENCE=https://api.<project>.proj.otomata.tech
+VITE_AUTH0_AUDIENCE=https://api.<project>.oto.zone
 ```
 
 ### 5. Auth0
@@ -226,7 +226,7 @@ auth0 apps create --name "<Project>" --type spa --callbacks "https://<project>.d
 
 Créer une API si besoin :
 ```bash
-auth0 apis create --name "<Project> API" --identifier "https://api.<project>.proj.otomata.tech"
+auth0 apis create --name "<Project> API" --identifier "https://api.<project>.oto.zone"
 ```
 
 ### 6. Tests
@@ -324,6 +324,11 @@ cd /data/projects/<project> && honcho start
 ```
 
 Honcho gère : logs préfixés par process, cleanup au Ctrl+C, multi-process (db + app + worker).
+
+**Logs** : honcho affiche tout sur stdout (pas de fichier). Pour persister les logs, utiliser `tee` dans le Procfile :
+```
+app: ./venv/bin/uvicorn app:app --port 8088 --reload 2>&1 | tee data/app.log
+```
 
 **Exemples Procfile :**
 
