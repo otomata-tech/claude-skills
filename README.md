@@ -12,7 +12,8 @@ Generic, reusable skills for Claude Code.
 | `session-lookup` | Search past Claude Code conversations by keyword/date/project (dir: `session/`) |
 | `session-copy` | Duplicate the current Claude Code session into an independent copy |
 | `timetrack` | Time tracking for freelance missions (logs in `/data/pro/time-entries.json`) |
-| `memento` | Capture session learnings into project memory (CLAUDE.md + docs/) |
+
+`memento` moved to its own plugin (skills + Memento MCP connector): [`otomata-tech/memento-plugin`](https://github.com/otomata-tech/memento-plugin).
 
 ## Installation
 
